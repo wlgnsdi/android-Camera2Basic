@@ -41,6 +41,7 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -59,6 +60,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.Toast;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -318,15 +320,15 @@ public class Camera2BasicFragment extends Fragment
 
         @Override
         public void onCaptureProgressed(@NonNull CameraCaptureSession session,
-                @NonNull CaptureRequest request,
-                @NonNull CaptureResult partialResult) {
+                                        @NonNull CaptureRequest request,
+                                        @NonNull CaptureResult partialResult) {
             process(partialResult);
         }
 
         @Override
         public void onCaptureCompleted(@NonNull CameraCaptureSession session,
-                @NonNull CaptureRequest request,
-                @NonNull TotalCaptureResult result) {
+                                       @NonNull CaptureRequest request,
+                                       @NonNull TotalCaptureResult result) {
             process(result);
         }
 
@@ -352,16 +354,16 @@ public class Camera2BasicFragment extends Fragment
      * doesn't exist, choose the largest one that is at most as large as the respective max size,
      * and whose aspect ratio matches with the specified value.
      *
-     * @param choices The list of sizes that the camera supports for the intended output class
-     * @param textureViewWidth The width of the texture view relative to sensor coordinate
+     * @param choices           The list of sizes that the camera supports for the intended output class
+     * @param textureViewWidth  The width of the texture view relative to sensor coordinate
      * @param textureViewHeight The height of the texture view relative to sensor coordinate
-     * @param maxWidth The maximum width that can be chosen
-     * @param maxHeight The maximum height that can be chosen
-     * @param aspectRatio The aspect ratio
+     * @param maxWidth          The maximum width that can be chosen
+     * @param maxHeight         The maximum height that can be chosen
+     * @param aspectRatio       The aspect ratio
      * @return The optimal {@code Size}, or an arbitrary one if none were big enough
      */
     private static Size chooseOptimalSize(Size[] choices, int textureViewWidth,
-            int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
+                                          int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
 
         // Collect the supported resolutions that are at least as big as the preview Surface
         List<Size> bigEnough = new ArrayList<>();
@@ -382,6 +384,8 @@ public class Camera2BasicFragment extends Fragment
             }
         }
 
+        System.out.println("@>> big : " + bigEnough.toString());
+        System.out.println("@>> bigNot : " + notBigEnough.toString());
         // Pick the smallest of those big enough. If there is no one big enough, pick the
         // largest of those not big enough.
         if (bigEnough.size() > 0) {
@@ -400,7 +404,7 @@ public class Camera2BasicFragment extends Fragment
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
     }
 
@@ -438,10 +442,6 @@ public class Camera2BasicFragment extends Fragment
         lens_facing = CameraCharacteristics.LENS_FACING_FRONT;
         startBackgroundThread();
 
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-        // a camera and start preview from here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
         if (mTextureView.isAvailable()) {
             openCamera(mTextureView.getWidth(), mTextureView.getHeight());
         } else {
@@ -466,7 +466,7 @@ public class Camera2BasicFragment extends Fragment
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-            @NonNull int[] grantResults) {
+                                           @NonNull int[] grantResults) {
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 ErrorDialog.newInstance(getString(R.string.request_permission))
@@ -480,7 +480,7 @@ public class Camera2BasicFragment extends Fragment
     /**
      * Sets up member variables related to camera.
      *
-     * @param width The width of available size for camera preview
+     * @param width  The width of available size for camera preview
      * @param height The height of available size for camera preview
      */
     @SuppressWarnings("SuspiciousNameCombination")
@@ -505,30 +505,29 @@ public class Camera2BasicFragment extends Fragment
                     }
                 }
 
-                StreamConfigurationMap map = characteristics
-                        .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
                 if (map == null) {
                     continue;
                 }
 
                 // For still image captures, we use the largest available size.
-                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                        new CompareSizesByArea());
-                mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
-                        ImageFormat.JPEG, /*maxImages*/2);
-                mImageReader
-                        .setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
+                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),new CompareSizesByArea());
+                mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),ImageFormat.JPEG, /*maxImages*/2);
+                mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
+
+
+                // 해당 디바이스의 기본 센서 방향(0,90,180,270)
+                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
                 // coordinate.
+                // noinspection ConstantConditions
+                // 디바이스 디스플레이 방향
                 int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-                //noinspection ConstantConditions
-//                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-                mSensorOrientation = ORIENTATIONS.get(displayRotation);
+                //  mSensorOrientation = ORIENTATIONS.get(displayRotation);
 
-                System.out.println(
-                        ">> display orientation : " + displayRotation + ", sensor orientation : "
-                                + mSensorOrientation);
+                System.out.println(">> display orientation : " + displayRotation + ", sensor orientation : "+ mSensorOrientation);
+
                 boolean swappedDimensions = false;
                 switch (displayRotation) {
                     case Surface.ROTATION_0:
@@ -537,21 +536,20 @@ public class Camera2BasicFragment extends Fragment
                             swappedDimensions = true;
                         }
                         break;
+
                     case Surface.ROTATION_90:
                     case Surface.ROTATION_270:
                         if (mSensorOrientation == 0 || mSensorOrientation == 180) {
                             swappedDimensions = true;
                         }
                         break;
+
                     default:
                         Log.e(TAG, "Display rotation is invalid: " + displayRotation);
                 }
 
                 Point displaySize = new Point();
                 activity.getWindowManager().getDefaultDisplay().getSize(displaySize);
-
-                System.out.println("@>> Rotated Width : " + width + ", Height : " + height);
-                System.out.println("@>> Display Width : " + displaySize.x + ", Height : " + displaySize.y);
 
                 int rotatedPreviewWidth = width;
                 int rotatedPreviewHeight = height;
@@ -577,24 +575,30 @@ public class Camera2BasicFragment extends Fragment
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                        rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
-                        maxPreviewHeight, largest);
+                        rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,maxPreviewHeight, largest);
 
+                System.out.println("@>> map : " + Arrays.toString(map.getOutputSizes(SurfaceTexture.class)));
                 System.out.println("@>> Rotated Width : " + width + ", Height : " + height);
                 System.out.println("@>> Display Width : " + displaySize.x + ", Height : " + displaySize.y);
                 System.out.println("@>> Preview Width : " + mPreviewSize.getWidth() + ", Height : " + mPreviewSize.getHeight());
 
+
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 int orientation = getResources().getConfiguration().orientation;
                 if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                    System.out.println(">> landscape");
-//                    mTextureView.setAspectRatio(width, height);
-                    mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    if (mPreviewSize.getWidth() > mPreviewSize.getHeight()) {
+                        mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    }
+                    else {
+                        mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                    }
                 } else {
-                    System.out.println(">> landscape ELSE");
-                    mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-//                    mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-//                    mTextureView.setAspectRatio(height, width);
+                    if (mPreviewSize.getWidth() > mPreviewSize.getHeight()) {
+                        mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                    }
+                    else {
+                        mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    }
                 }
 
                 // Check if the flash is supported.
@@ -757,16 +761,16 @@ public class Camera2BasicFragment extends Fragment
      * This method should be called after the camera preview size is determined in
      * setUpCameraOutputs and also the size of `mTextureView` is fixed.
      *
-     * @param viewWidth The width of `mTextureView`
+     * @param viewWidth  The width of `mTextureView`
      * @param viewHeight The height of `mTextureView`
      */
     private void configureTransform(int viewWidth, int viewHeight) {
         Activity activity = getActivity();
-//        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         if (null == mTextureView || null == mPreviewSize || null == activity) {
             return;
         }
+
         int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
         Matrix matrix = new Matrix();
 
@@ -775,16 +779,20 @@ public class Camera2BasicFragment extends Fragment
         float centerX = viewRect.centerX();
         float centerY = viewRect.centerY();
 
+        System.out.println("@>> rotation : " + rotation);
+
         if (Surface.ROTATION_90 == rotation || Surface.ROTATION_270 == rotation) {
             bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+
             matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
             float scale = Math.max(
                     (float) viewHeight / mPreviewSize.getHeight(),
                     (float) viewWidth / mPreviewSize.getWidth());
 
-            matrix.postScale(scale, scale, centerX, centerY);
+            System.out.println("@>> scale : " + scale);
             matrix.postRotate(90 * (rotation - 2), centerX, centerY);
         } else if (Surface.ROTATION_180 == rotation) {
+            // TODO : ROTATION_0 에 대한 처리가 없다.
             matrix.postRotate(180, centerX, centerY);
         }
 
@@ -862,8 +870,8 @@ public class Camera2BasicFragment extends Fragment
 
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
-                        @NonNull CaptureRequest request,
-                        @NonNull TotalCaptureResult result) {
+                                               @NonNull CaptureRequest request,
+                                               @NonNull TotalCaptureResult result) {
                     showToast("Saved: " + mFile);
                     Log.d(TAG, mFile.toString());
                     unlockFocus();
