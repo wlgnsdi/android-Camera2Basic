@@ -41,7 +41,6 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -373,13 +372,20 @@ public class Camera2BasicFragment extends Fragment
         int h = aspectRatio.getHeight();
 
         for (Size option : choices) {
-            if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
-                    option.getHeight() == option.getWidth() * h / w) {
-                if (option.getWidth() >= textureViewWidth &&
-                        option.getHeight() >= textureViewHeight) {
-                    bigEnough.add(option);
-                } else {
-                    notBigEnough.add(option);
+            if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight && option.getHeight() == option.getWidth() * h / w) {
+                if (textureViewWidth >= textureViewHeight) {
+                    if (option.getWidth() >= textureViewWidth && option.getHeight() >= textureViewHeight) {
+                        bigEnough.add(option);
+                    } else {
+                        notBigEnough.add(option);
+                    }
+                }
+                else {
+                    if (option.getWidth() >= textureViewHeight && option.getHeight() >= textureViewWidth) {
+                        bigEnough.add(option);
+                    } else {
+                        notBigEnough.add(option);
+                    }
                 }
             }
         }
@@ -487,46 +493,32 @@ public class Camera2BasicFragment extends Fragment
     private void setUpCameraOutputs(int width, int height) {
         Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            System.out.println(">> " + manager.getCameraIdList().length);
 
+        try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
 
-                // We don't use a front facing camera in this sample.
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (lens_facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                        continue;
-                    }
+                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) continue;
                 } else {
-                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
-                        continue;
-                    }
+                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) continue;
                 }
 
                 StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                if (map == null) {
-                    continue;
-                }
+                if (map == null) continue;
 
                 // For still image captures, we use the largest available size.
-                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),new CompareSizesByArea());
-                mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),ImageFormat.JPEG, /*maxImages*/2);
+                Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)), new CompareSizesByArea());
+                mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
                 mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
-
 
                 // 해당 디바이스의 기본 센서 방향(0,90,180,270)
                 mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
-                // Find out if we need to swap dimension to get the preview size relative to sensor
-                // coordinate.
-                // noinspection ConstantConditions
+                // Find out if we need to swap dimension to get the preview size relative to sensor coordinate.
                 // 디바이스 디스플레이 방향
                 int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-                //  mSensorOrientation = ORIENTATIONS.get(displayRotation);
-
-                System.out.println(">> display orientation : " + displayRotation + ", sensor orientation : "+ mSensorOrientation);
 
                 boolean swappedDimensions = false;
                 switch (displayRotation) {
@@ -575,7 +567,7 @@ public class Camera2BasicFragment extends Fragment
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                        rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,maxPreviewHeight, largest);
+                        rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth, maxPreviewHeight, largest);
 
                 System.out.println("@>> map : " + Arrays.toString(map.getOutputSizes(SurfaceTexture.class)));
                 System.out.println("@>> Rotated Width : " + width + ", Height : " + height);
@@ -588,15 +580,13 @@ public class Camera2BasicFragment extends Fragment
                 if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
                     if (mPreviewSize.getWidth() > mPreviewSize.getHeight()) {
                         mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                    }
-                    else {
+                    } else {
                         mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
                     }
                 } else {
                     if (mPreviewSize.getWidth() > mPreviewSize.getHeight()) {
                         mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-                    }
-                    else {
+                    } else {
                         mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                     }
                 }
@@ -704,14 +694,14 @@ public class Camera2BasicFragment extends Fragment
             assert texture != null;
 
             // We configure the size of default buffer to be the size of camera preview we want.
+            // 화질
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
 
             // This is the output Surface we need to start preview.
             Surface surface = new Surface(texture);
 
             // We set up a CaptureRequest.Builder with the output Surface.
-            mPreviewRequestBuilder
-                    = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             mPreviewRequestBuilder.addTarget(surface);
 
             // Here, we create a CameraCaptureSession for camera preview.
@@ -781,15 +771,23 @@ public class Camera2BasicFragment extends Fragment
 
         System.out.println("@>> rotation : " + rotation);
 
+        bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+
+        matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
+        float scale = Math.max(
+                (float) viewHeight / mPreviewSize.getHeight(),
+                (float) viewWidth / mPreviewSize.getWidth());
+        matrix.setScale(scale, scale, centerX, centerY);
+
         if (Surface.ROTATION_90 == rotation || Surface.ROTATION_270 == rotation) {
-            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+//            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+//
+//            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
+//            float scale = Math.max(
+//                    (float) viewHeight / mPreviewSize.getHeight(),
+//                    (float) viewWidth / mPreviewSize.getWidth());
 
-            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
-            float scale = Math.max(
-                    (float) viewHeight / mPreviewSize.getHeight(),
-                    (float) viewWidth / mPreviewSize.getWidth());
-
-            System.out.println("@>> scale : " + scale);
+//            System.out.println("@>> scale : " + scale);
             matrix.postRotate(90 * (rotation - 2), centerX, centerY);
         } else if (Surface.ROTATION_180 == rotation) {
             // TODO : ROTATION_0 에 대한 처리가 없다.
